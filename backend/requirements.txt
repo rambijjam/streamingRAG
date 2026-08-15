@@ -1,0 +1,15 @@
+langchain
+langchain-google-genai
+langchain-community
+python-dotenv
+pypdf
+qdrant-client
+langchain_qdrant
+pydantic
+mysql-connector-python
+kafka
+bcrypt
+jwt
+uvicorn
+fastapi
+multipart
