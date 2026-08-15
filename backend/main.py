@@ -18,15 +18,12 @@ from db import (
 )
 from query import ask_knowledge_base
 
-SECRET_KEY = "super_secret_enterprise_rag_key"
-ALGORITHM = "HS256"
+SECRET_KEY = os.getenv("SECRET")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 app = FastAPI(title="Enterprise Secure RAG System API")
 
-app = FastAPI(title="Enterprise RAG Backend")
-
-# --- ADD THIS CORS BLOCK ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
