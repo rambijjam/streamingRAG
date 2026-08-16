@@ -13,7 +13,7 @@ from kafka import KafkaProducer
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import (
-    create_user, get_user_by_email, get_user_by_id, get_all_users, toggle_user_status, 
+    create_user, get_chat_history_by_user_id, get_user_by_email, get_user_by_id, get_all_users, save_chat_message, toggle_user_status, 
     update_user_role, save_document_and_permissions
 )
 from query import ask_knowledge_base
@@ -54,9 +54,11 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         role: str = payload.get("role")
+        user_id: int = payload.get("user_id")
+
         if email is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return {"email": email, "role": role}
+        return {"user_id": user_id, "email": email, "role": role}
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
@@ -65,7 +67,6 @@ def require_admin(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return user
 
-#Endpoints
 class RegisterModel(BaseModel):
     full_name: str
     email: str
@@ -81,6 +82,8 @@ class RoleUpdateModel(BaseModel):
 class UserStatusUpdateModel(BaseModel):
     email: str
     is_active: bool
+
+#Endpoints
 
 @app.post("/auth/register", tags=["Auth"])
 def register(user_data: RegisterModel):
@@ -104,7 +107,14 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
             detail="Account is deactivated. Please contact an Administrator."
         )
     
-    access_token = create_access_token(data={"sub": user["email"], "role": user["role_name"]})
+    access_token = create_access_token(
+        data={
+            "sub": user["email"], 
+            "role": user["role_name"],
+            "user_id": user["user_id"]
+        }
+    )
+
     return {"access_token": access_token, "token_type": "bearer", "role": user["role_name"]}
 
 
@@ -174,4 +184,16 @@ async def upload_document(
 def ask_question(data: QueryModel, user: dict = Depends(get_current_user)):
     user_role = user["role"]
     answer = ask_knowledge_base(data.question, user_role=user_role)
+
+
+    save_chat_message(user["user_id"], data.question, answer)
+        
     return {"question": data.question, "user_role": user_role, "answer": answer}
+
+@app.get("/chat/history", tags=["RAG Query"])
+def get_user_history(limit: int = 50, user: dict = Depends(get_current_user)):
+
+    user_id = user["user_id"]
+
+    history = get_chat_history_by_user_id(user_id=user_id, limit=limit)
+    return {"history": history}

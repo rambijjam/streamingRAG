@@ -115,6 +115,35 @@ def toggle_user_status(user_email: str, new_status: bool):
 
     return success
 
+def save_chat_message(user_id: int, question: str, answer: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    query = "INSERT INTO chat_history (user_id, question, answer) VALUES (%s, %s, %s)"
+    cursor.execute(query, (user_id, question, answer))
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+def get_chat_history_by_user_id(user_id: int, limit: int = 50) -> List[dict]:
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    query = """
+        SELECT id, question, answer, created_at 
+        FROM chat_history 
+        WHERE user_id = %s 
+        ORDER BY created_at ASC 
+        LIMIT %s
+    """
+    cursor.execute(query, (user_id, limit))
+    history = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    return history
+
 def save_document_and_permissions(doc_id:str, filename:str, topic:str, allowed_roles: list[str]):
     conn = get_db_connection()
     cursor = conn.cursor()

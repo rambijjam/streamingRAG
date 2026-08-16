@@ -55,6 +55,18 @@ def init_database():
     );
     """)
 
+    #4. `chat_history` Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chat_history (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            question TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+        )
+    """)
+
     # Create Initial Default Admin Account
     admin_email = "admin@company.com"
     cursor.execute("SELECT * FROM users WHERE email = %s", (admin_email,))
