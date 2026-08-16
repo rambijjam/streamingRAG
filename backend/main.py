@@ -13,7 +13,7 @@ from kafka import KafkaProducer
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import (
-    create_user, get_user_by_email, get_user_by_id, get_all_users, 
+    create_user, get_user_by_email, get_user_by_id, get_all_users, toggle_user_status, 
     update_user_role, save_document_and_permissions
 )
 from query import ask_knowledge_base
@@ -72,6 +72,16 @@ class RegisterModel(BaseModel):
     password: str
     role_name: str = "employee"
 
+class QueryModel(BaseModel):
+    question: str
+
+class RoleUpdateModel(BaseModel):
+    new_role: str
+
+class UserStatusUpdateModel(BaseModel):
+    email: str
+    is_active: bool
+
 @app.post("/auth/register", tags=["Auth"])
 def register(user_data: RegisterModel):
     existing = get_user_by_email(user_data.email)
@@ -88,6 +98,12 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     if not user or not verify_password(form_data.password, user["password_hash"]):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     
+    if not user.get("is_active"):
+        raise HTTPException(
+            status_code=401, 
+            detail="Account is deactivated. Please contact an Administrator."
+        )
+    
     access_token = create_access_token(data={"sub": user["email"], "role": user["role_name"]})
     return {"access_token": access_token, "token_type": "bearer", "role": user["role_name"]}
 
@@ -101,8 +117,6 @@ def list_users(
 ):
     return get_all_users(role_filter=role, is_active_filter=is_active, search_query=search)
 
-class RoleUpdateModel(BaseModel):
-    new_role: str
 
 @app.put("/admin/users/{user_id}/role", tags=["Admin User Management"])
 def modify_role(user_id: int, data: RoleUpdateModel, admin: dict = Depends(require_admin)):
@@ -116,6 +130,20 @@ def modify_role(user_id: int, data: RoleUpdateModel, admin: dict = Depends(requi
         
     update_user_role(user_id, data.new_role)
     return {"message": f"User '{target_user['full_name']}' updated to role '{data.new_role}'"}
+
+@app.put("/admin/users/status", tags=["Admin User Management"])
+def update_user_status(data: UserStatusUpdateModel, admin: dict = Depends(require_admin)):
+
+    # Self-deactivation protection
+    if data.email == admin["email"]:
+        raise HTTPException(status_code=400, detail="You cannot deactivate your own admin account.")
+
+    success = toggle_user_status(data.email, data.is_active)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found or status unchanged")
+    
+    status_text = "activated" if data.is_active else "deactivated"
+    return {"message": f"User {data.email} has been {status_text}."}
 
 
 @app.post("/admin/upload", tags=["Admin Documents"])
@@ -141,9 +169,6 @@ async def upload_document(
 
     return {"message": "Document uploaded and queued for processing", "doc_id": doc_id}
 
-
-class QueryModel(BaseModel):
-    question: str
 
 @app.post("/ask", tags=["RAG Query"])
 def ask_question(data: QueryModel, user: dict = Depends(get_current_user)):

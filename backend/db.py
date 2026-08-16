@@ -29,7 +29,7 @@ def get_user_by_email(email: str):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT * FROM users WHERE email = %s AND is_active = TRUE", (email,))
+    cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
     user = cursor.fetchone()
 
     cursor.close()
@@ -83,7 +83,7 @@ def update_user_role(user_id : int, new_role : str):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("UPDATE users SET role_name = %s WHERE user_id == %s", (new_role.lower(), user_id))
+    cursor.execute("UPDATE users SET role_name = %s WHERE user_id = %s", (new_role.lower(), user_id))
     conn.commit()
 
     cursor.close()
@@ -99,6 +99,21 @@ def update_user_status(user_id: int, is_active: bool):
     
     cursor.close()
     conn.close()
+
+def toggle_user_status(user_email: str, new_status: bool):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    query = "UPDATE users SET is_active = %s WHERE email = %s"
+    
+    cursor.execute(query, (new_status, user_email))
+    conn.commit()
+
+    success = cursor.rowcount > 0
+
+    cursor.close()
+    conn.close()
+
+    return success
 
 def save_document_and_permissions(doc_id:str, filename:str, topic:str, allowed_roles: list[str]):
     conn = get_db_connection()
@@ -136,3 +151,4 @@ def get_allowed_doc_ids(user_role: str) -> list[str]:
     except Exception as e:
         print(f"[!] Database error: {e}")
         return []
+
