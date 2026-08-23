@@ -1,6 +1,10 @@
 import mysql.connector
-from typing import Optional
+from typing import Optional, List
 import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DB_CONFIG = {
     "host": "localhost",
@@ -123,8 +127,50 @@ def save_chat_message(user_id: int, question: str, answer: str):
     cursor.execute(query, (user_id, question, answer))
     conn.commit()
 
+    chat_id = cursor.lastrowid
+
     cursor.close()
     conn.close()
+
+    return chat_id
+
+def update_chat_feedback(chat_id: int, user_id: int, score: int, text: str = None):
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # We check user_id to ensure a user can only leave feedback on their own chats
+    query = """
+        UPDATE chat_history 
+        SET feedback_score = %s, feedback_text = %s 
+        WHERE id = %s AND user_id = %s
+    """
+    cursor.execute(query, (score, text, chat_id, user_id))
+    conn.commit()
+    success = cursor.rowcount > 0
+
+    cursor.close()
+    conn.close()
+    return success
+
+def get_admin_feedback_logs():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Gets all chats that received a thumbs down (-1) or thumbs up (1)
+    query = """
+        SELECT ch.id, ch.question, ch.answer, ch.feedback_score, ch.feedback_text, ch.created_at, u.email
+        FROM chat_history ch
+        JOIN users u ON ch.user_id = u.user_id
+        WHERE ch.feedback_score != 0
+        ORDER BY ch.created_at DESC
+    """
+    cursor.execute(query)
+    logs = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    return logs
 
 def get_chat_history_by_user_id(user_id: int, limit: int = 50) -> List[dict]:
     conn = get_db_connection()
@@ -180,4 +226,62 @@ def get_allowed_doc_ids(user_role: str) -> list[str]:
     except Exception as e:
         print(f"[!] Database error: {e}")
         return []
+
+def get_all_documents():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # We use GROUP_CONCAT to get the roles as a single comma-separated string
+    query = """
+        SELECT d.doc_id, d.document_topic, d.filename, d.uploaded_at, 
+               GROUP_CONCAT(dp.role_name) as allowed_roles
+        FROM documents d
+        LEFT JOIN document_permissions dp ON d.doc_id = dp.doc_id
+        GROUP BY d.doc_id
+        ORDER BY d.uploaded_at DESC
+    """
+    cursor.execute(query)
+    docs = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    # Convert the comma-separated string back into a clean Python list
+    for doc in docs:
+        if doc['allowed_roles']:
+            doc['allowed_roles'] = doc['allowed_roles'].split(',')
+        else:
+            doc['allowed_roles'] = []
+            
+    return docs
+
+def update_document_roles(doc_id: str, allowed_roles: list[str]):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 1. Wipe out the old permissions
+    cursor.execute("DELETE FROM document_permissions WHERE doc_id = %s", (doc_id,))
+    
+    # 2. Insert the new ones
+    for role in allowed_roles:
+        cursor.execute(
+            "INSERT INTO document_permissions (doc_id, role_name) VALUES (%s, %s)",
+            (doc_id, role.strip().lower())
+        )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def delete_document_record(doc_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # We must delete permissions first to avoid Foreign Key constraint errors
+    cursor.execute("DELETE FROM document_permissions WHERE doc_id = %s", (doc_id,))
+    cursor.execute("DELETE FROM documents WHERE doc_id = %s", (doc_id,))
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
 
