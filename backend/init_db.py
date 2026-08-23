@@ -1,6 +1,9 @@
 import mysql.connector
 import bcrypt
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DB_CONFIG = {
     "host": "localhost",
@@ -62,6 +65,8 @@ def init_database():
             user_id INT NOT NULL,
             question TEXT NOT NULL,
             answer TEXT NOT NULL,
+            feedback_score INT DEFAULT 0,
+            feedback_text TEXT DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
         )
