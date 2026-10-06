@@ -29,7 +29,7 @@ if not qdrant_client.collection_exists(collection_name=COLLECTION_NAME):
     qdrant_client.create_collection(
         collection_name=COLLECTION_NAME,
         vectors_config=models.VectorParams(
-            size=3072,  # Gemini embeddings are 768 dimensions
+            size=3072,
             distance=models.Distance.COSINE
         )
     )
@@ -102,18 +102,17 @@ def deprecate_old_versions(document_topic: str, new_effective_year: int):
         return
         
     print(f"    -> Found {len(records)} active chunks. Deprecating them...")
-    point_ids = [record.id for record in records]
-    
-    qdrant_client.set_payload(
-        collection_name=COLLECTION_NAME,
-        payload={
-            "metadata": {
-                "is_active": False,
-                "valid_to_year": new_effective_year 
-            }
-        },
-        points=point_ids
-    )
+    for record in records:
+        existing_metadata = record.payload.get("metadata", {})
+        existing_metadata["is_active"] = False
+        existing_metadata["valid_to_year"] = new_effective_year
+        
+        qdrant_client.set_payload(
+            collection_name=COLLECTION_NAME,
+            payload={"metadata": existing_metadata},
+            points=[record.id]
+        )
+
     print("    -> Old versions successfully deprecated.")
 
 
@@ -150,7 +149,7 @@ def process_and_embed_pdf(event_data : dict):
 
     print(f"\n [Kafka Worker] Ingesting :{filename}")
     try:
-        loader = PyPDFLoader(file_path)
+        loader = PyPDFLoader(file_path) #provided by langchain
         pages = loader.load()
         if not pages:
             print(f"[!] {filename} is empty or unreadable. Skipping.")
@@ -193,7 +192,8 @@ if __name__ == "__main__":
     consumer = KafkaConsumer(
         KAFKA_TOPIC,
         bootstrap_servers=['localhost:9092'],
-        value_deserializer=lambda x: json.loads(x.decode('utf-8')),
+        value_deserializer=lambda x: json.loads(x.decode('utf-8')), # this function runs automatically on every message's raw
+        #  value bytes,raw bytes -> decode string -> json.loads -> dict
         auto_offset_reset='earliest'
     )
 

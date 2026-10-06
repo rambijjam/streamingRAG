@@ -26,7 +26,7 @@ if not qdrant_client.collection_exists(collection_name=COLLECTION_NAME):
     qdrant_client.create_collection(
         collection_name=COLLECTION_NAME,
         vectors_config=models.VectorParams(
-            size=768,  # Gemini embeddings are 768 dimensions
+            size=3072, 
             distance=models.Distance.COSINE
         )
     )
@@ -61,7 +61,7 @@ def route_query(user_question: str) -> QueryIntent:
     2. INTENT = 'historical': Triggered by past-tense ("What was...", "Did we used to...").
     3. TARGET YEAR: Extract the year if specified.
     4. SEARCH QUERY: Strip temporal phrases (e.g., "in 2023", "previously") from the output search query.
-    
+
     User Question: {user_question}
     """
     return structured_router.invoke(prompt)
@@ -160,6 +160,6 @@ def ask_knowledge_base(user_question: str, user_role: str = "employee"):
     chain = prompt | generation_llm
     response = chain.invoke({"context": formatted_context, "question": user_question})
     
-    if isinstance(response.content, list):
+    if isinstance(response.content, list): # if ai returns list of answers , return the first one
         return response.content[0].get("text", "")
     return response.content

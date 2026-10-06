@@ -35,7 +35,8 @@ app.add_middleware(
 
 producer = KafkaProducer(
     bootstrap_servers=['localhost:9092'],
-    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+    value_serializer=lambda v: json.dumps(v).encode('utf-8') #this function runs automatically on 
+    # every message's raw dict, dict -> json.dumps -> encode string -> raw bytes
 )
 
 def verify_password(plain, hashed):
@@ -164,9 +165,9 @@ def update_user_status(data: UserStatusUpdateModel, admin: dict = Depends(requir
 
 @app.post("/admin/upload", tags=["Admin Documents"])
 async def upload_document(
-    file: UploadFile = File(...),
-    allowed_roles: str = Form(...),
-    document_topic: str = Form(...),
+    file: UploadFile = File(...), # get the file from the File field in the form-data
+    allowed_roles: str = Form(...), # get the allowed_roles from the Form field in the form-data
+    document_topic: str = Form(...), # get the document_topic from the Form field in the form-data
     admin: dict = Depends(require_admin)
 ):
     doc_id = f"DOC-{uuid.uuid4().hex[:8]}"
@@ -181,7 +182,7 @@ async def upload_document(
 
     kafka_payload = {"doc_id": doc_id, "file_path": file_path}
     producer.send("document-ingestion", kafka_payload)
-    producer.flush()
+    producer.flush() # blocks the event loop thread 
 
     return {"message": "Document uploaded and queued for processing", "doc_id": doc_id}
 
@@ -212,6 +213,10 @@ def get_user_history(limit: int = 50, user: dict = Depends(get_current_user)):
 @app.get("/admin/documents", tags=["Admin Documents"])
 def list_documents(admin: dict = Depends(require_admin)):
     docs = get_all_documents()
+
+    for doc in docs:
+        doc['uploaded_at'] = doc['uploaded_at'].isoformat() + 'Z'   
+
     return {"documents": docs}
 
 @app.put("/admin/documents/{doc_id}/permissions", tags=["Admin Documents"])
@@ -248,4 +253,9 @@ def submit_feedback(chat_id: int, data: FeedbackUpdateModel, user: dict = Depend
 @app.get("/admin/feedback", tags=["Admin Panel"])
 def view_feedback_logs(admin: dict = Depends(require_admin)):
     logs = get_admin_feedback_logs()
+
+    for log in logs:
+        if log.get('created_at') is not None:
+            log['created_at'] = log['created_at'].isoformat() + 'Z'
+
     return {"feedback_logs": logs}
