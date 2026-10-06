@@ -177,7 +177,7 @@ def get_chat_history_by_user_id(user_id: int, limit: int = 50) -> List[dict]:
     cursor = conn.cursor(dictionary=True)
 
     query = """
-        SELECT id, question, answer, created_at 
+        SELECT id, question, answer, feedback_score, created_at 
         FROM chat_history 
         WHERE user_id = %s 
         ORDER BY created_at ASC 
@@ -220,7 +220,15 @@ def get_allowed_doc_ids(user_role: str) -> list[str]:
 
         cursor.close()
         conn.close()
-        
+
+        """"
+        results = 
+            [
+                ('DOC-ebe399d6',), 
+                ('DOC-860669a8',), 
+                ('DOC-38eca412',)
+            ]
+        """
         return [row[0] for row in results]
         
     except Exception as e:
